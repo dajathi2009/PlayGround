@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#8edcf0" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%235d9845'/%3E%3Ccircle cx='32' cy='32' r='11' fill='%23ffe486'/%3E%3Cpath d='M32 6v10m0 32v10M6 32h10m32 0h10M14 14l7 7m22 22 7 7m0-36-7 7m-22 22-7 7' stroke='%23ffe486' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <title>Plants vs. Zombies: Lobotomized — Jardín</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Trebuchet MS", "Arial Rounded MT Bold", system-ui, sans-serif;
+      --ink: #274c34;
+      --cream: #fff6d8;
+      --leaf: #5d8f3d;
+      --cell-gap: 3px;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { background: #81d8ed; color: var(--ink); user-select: none; }
+    .scene { position: relative; width: 100%; height: 100%; min-height: 420px; overflow: hidden; isolation: isolate; }
+    .backdrop { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; }
+    .sky-glow { position: absolute; inset: 0 0 auto; height: 23%; z-index: -1; pointer-events: none; background: linear-gradient(180deg, rgba(255,255,255,.16), transparent); }
+    .topbar {
+      position: absolute; z-index: 3; inset: 18px 24px auto;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      pointer-events: none;
+    }
+    .brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+    .brand-mark {
+      width: 54px; height: 54px; flex: 0 0 auto; display: grid; place-items: center;
+      border: 3px solid #fff5ca; border-radius: 17px; color: #fff9db; font-size: 30px;
+      background: linear-gradient(145deg, #73b74e, #397b42); box-shadow: 0 4px 0 #30613a, 0 7px 15px #285c3970;
+      transform: rotate(-4deg);
+    }
+    .brand-copy { text-shadow: 0 2px 0 #fff8df, 0 3px 8px #fff8df; }
+    .eyebrow { margin: 0 0 2px; color: #597242; font-size: 10px; font-weight: 900; letter-spacing: .19em; text-transform: uppercase; }
+    h1 { margin: 0; color: #315d36; font-size: clamp(18px, 2.2vw, 29px); line-height: 1; letter-spacing: -.04em; font-weight: 1000; }
+    .board-status {
+      display: flex; align-items: center; gap: 13px; padding: 10px 15px; min-height: 52px;
+      border: 2px solid #fff9db; border-radius: 16px; background: #fff9e8e8;
+      box-shadow: 0 4px 0 #638c4870, 0 8px 18px #3a683540; color: #426543;
+      backdrop-filter: blur(5px); text-align: right;
+    }
+    .status-dot { width: 11px; height: 11px; flex: 0 0 auto; border-radius: 50%; background: #94bd5e; box-shadow: 0 0 0 4px #94bd5e2c; }
+    .status-label { display: block; color: #78906a; font-size: 9px; font-weight: 900; letter-spacing: .15em; }
+    .status-value { display: block; margin-top: 2px; font-size: 14px; font-weight: 1000; white-space: nowrap; }
+    .field-note {
+      position: absolute; z-index: 2; left: 25.2%; top: 17.7%; color: #fff8d8;
+      padding: 6px 11px; border: 1px solid #f9f2c563; border-radius: 99px;
+      background: #416e3a9c; box-shadow: 0 2px 8px #23523a35; font-size: 10px;
+      font-weight: 900; letter-spacing: .12em; text-transform: uppercase; text-shadow: 0 1px 2px #31592d;
+      pointer-events: none;
+    }
+    .board-wrap {
+      position: absolute; left: 23.3%; top: 24%; width: 74%; height: 60%;
+      display: grid; grid-template: 21px 1fr / 24px 1fr;
+      filter: drop-shadow(0 11px 9px #214c3470);
+    }
+    .axis-corner { grid-area: 1 / 1; }
+    .col-axis { grid-area: 1 / 2; display: grid; grid-template-columns: repeat(9, 1fr); gap: var(--cell-gap); align-items: center; }
+    .row-axis { grid-area: 2 / 1; display: grid; grid-template-rows: repeat(5, 1fr); gap: var(--cell-gap); align-items: center; }
+    .axis-num { color: #fdf2c9; font-size: 11px; font-weight: 1000; text-align: center; text-shadow: 0 1px 3px #254e30, 0 0 5px #214c34; }
+    .grid {
+      grid-area: 2 / 2; display: grid; grid-template-columns: repeat(9, minmax(0, 1fr));
+      grid-template-rows: repeat(5, minmax(0, 1fr)); gap: var(--cell-gap);
+      padding: 6px; border: 3px solid #f3e5a5; border-radius: 13px;
+      background: linear-gradient(135deg, #7d5429, #a8773b 48%, #76502b);
+      box-shadow: inset 0 0 0 2px #5a73374d, 0 3px 0 #5c482c;
+      overflow: visible;
+    }
+    .cell {
+      position: relative; min-width: 0; min-height: 0; border: 1px solid #e8e9a47d;
+      border-radius: 5px; cursor: crosshair; outline: none;
+      background-color: #8ebc4f;
+      background-image: linear-gradient(145deg, #ffffff15 0 25%, transparent 25% 72%, #285c2510 72%), linear-gradient(35deg, #6ea243 0 48%, #9fca58 48%);
+      box-shadow: inset 0 1px 0 #f6f7b347, inset 0 -3px 0 #376c2c32;
+      transition: filter .12s ease, transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+    }
+    .cell:nth-child(odd) { background-image: linear-gradient(145deg, #ffffff15 0 25%, transparent 25% 72%, #285c2510 72%), linear-gradient(35deg, #79a94a 0 48%, #a8cc5a 48%); }
+    .cell::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(ellipse at 18% 19%, #eef39d35, transparent 42%); pointer-events: none; }
+    .cell:hover, .cell:focus-visible, .cell.is-active {
+      z-index: 1; border-color: #fff6b8; outline: 2px solid #fff4ad;
+      background-color: #d7ed74; filter: brightness(1.13) saturate(1.12);
+      box-shadow: inset 0 0 0 2px #fff9c9b8, 0 0 14px #fff4a8cc;
+    }
+    .cell:focus-visible { outline-offset: 1px; }
+    .coordinate-tag {
+      position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.94);
+      padding: 5px 8px; border: 1px solid #fff8c8; border-radius: 8px;
+      color: #fff9dc; background: #365b36ed; box-shadow: 0 2px 7px #29482b75;
+      opacity: 0; white-space: nowrap; font-size: 11px; font-weight: 1000; pointer-events: none;
+      transition: opacity .1s, transform .1s;
+    }
+    .cell:hover .coordinate-tag, .cell:focus-visible .coordinate-tag, .cell.is-active .coordinate-tag { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    .bottom-hint {
+      position: absolute; z-index: 2; right: 25px; bottom: 20px; display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border: 1px solid #fff7cf9c; border-radius: 12px; color: #f9f4d0;
+      background: #416c3fd4; box-shadow: 0 3px 9px #2756384d; font-size: 11px; font-weight: 800;
+      text-shadow: 0 1px 2px #365b37; pointer-events: none;
+    }
+    .mouse-icon { width: 14px; height: 19px; border: 1.5px solid #fff4cd; border-radius: 8px; position: relative; }
+    .mouse-icon::before { content: ""; position: absolute; width: 2px; height: 4px; top: 3px; left: 5px; border-radius: 2px; background: #fff4cd; }
+    .sunshine { position: absolute; right: 5.5%; top: 13%; width: 76px; aspect-ratio: 1; border-radius: 50%; background: #ffe989; box-shadow: 0 0 0 12px #fff2a32b, 0 0 42px 18px #fff0a550; }
+    .mobile-house { display: none; position: absolute; z-index: -1; left: -20px; top: 18%; width: 220px; height: 165px; pointer-events: none; }
+    .foreground { position: absolute; z-index: 1; left: 0; right: 0; bottom: -1px; height: 13%; pointer-events: none; }
+    .flower-clump { position: absolute; bottom: 0; width: 128px; height: 105px; }
+    .flower-clump.left { left: 3%; transform: scale(.85); transform-origin: bottom left; }
+    .flower-clump.right { right: 11%; transform: scale(.68); transform-origin: bottom center; }
+    .ground-edge { position: absolute; inset: auto 0 0; height: 20px; background: linear-gradient(#527d3d, #365f36); border-top: 3px solid #aec65d; }
+    @media (max-width: 700px) {
+      .scene { min-height: 360px; }
+      .topbar { inset: max(10px, env(safe-area-inset-top)) 12px auto; gap: 7px; }
+      .brand { gap: 8px; }
+      .brand-mark { width: 39px; height: 39px; border-radius: 12px; font-size: 23px; border-width: 2px; box-shadow: 0 3px 0 #30613a; }
+      .eyebrow { font-size: 7px; letter-spacing: .13em; }
+      h1 { font-size: clamp(14px, 4vw, 19px); }
+      .board-status { min-height: 41px; padding: 6px 8px; gap: 8px; border-radius: 12px; }
+      .status-dot { width: 8px; height: 8px; }
+      .status-label { font-size: 7px; }
+      .status-value { font-size: 10px; }
+      .field-note { left: 5%; top: 18%; font-size: 8px; padding: 5px 8px; }
+      .board-wrap { left: 3%; top: 30%; width: 94%; height: min(54%, calc((100vw - 42px) * .68)); grid-template: 18px 1fr / 17px 1fr; }
+      .axis-num { font-size: 9px; }
+      .grid { gap: 2px; padding: 4px; border-width: 2px; border-radius: 9px; }
+      .cell { border-radius: 3px; }
+      .coordinate-tag { padding: 4px 5px; font-size: 9px; border-radius: 6px; }
+      .bottom-hint { right: 10px; bottom: max(11px, env(safe-area-inset-bottom)); font-size: 9px; padding: 6px 9px; }
+      .sunshine { right: 12%; top: 14%; width: 48px; }
+      .mobile-house { display: block; }
+      .foreground { height: 11%; }
+      .flower-clump.left { transform: scale(.57); }
+      .flower-clump.right { transform: scale(.48); right: 17%; }
+    }
+    @media (max-height: 520px) and (min-width: 701px) {
+      .topbar { inset: 9px 18px auto; }
+      .brand-mark { width: 42px; height: 42px; font-size: 24px; }
+      .board-wrap { top: 23%; height: 66%; }
+      .field-note { top: 16.5%; }
+      .bottom-hint { bottom: 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="scene" aria-label="Jardín residencial y tablero de combate">
+    <svg class="backdrop" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#73cce7"/><stop offset=".63" stop-color="#b5e8e5"/><stop offset="1" stop-color="#e4f0c4"/></linearGradient>
+        <linearGradient id="lawn" x2="0" y2="1"><stop stop-color="#9bcf5b"/><stop offset=".48" stop-color="#78b74b"/><stop offset="1" stop-color="#5e9c43"/></linearGradient>
+        <linearGradient id="wall" x2="0" y2="1"><stop stop-color="#f5d894"/><stop offset="1" stop-color="#d9aa67"/></linearGradient>
+        <linearGradient id="roof" x2="0" y2="1"><stop stop-color="#a95d40"/><stop offset="1" stop-color="#763d35"/></linearGradient>
+        <pattern id="siding" width="22" height="34" patternUnits="userSpaceOnUse"><path d="M0 33.5H22" stroke="#ad7f4f" stroke-opacity=".22"/></pattern>
+        <pattern id="fencegrain" width="26" height="60" patternUnits="userSpaceOnUse"><path d="M5 0v60M19 0v60" stroke="#946c43" stroke-opacity=".18"/></pattern>
+        <filter id="soft"><feGaussianBlur stdDeviation="9"/></filter>
+      </defs>
+      <rect width="1440" height="900" fill="url(#sky)"/>
+      <g fill="#fff" opacity=".55">
+        <path d="M408 142c7-23 42-29 57-10 18-21 56-8 54 18 27 1 32 34 8 41H408c-28-1-26-42 0-49Z"/>
+        <path d="M1070 212c8-20 37-23 49-7 15-18 46-8 46 14 23 2 27 29 6 36h-98c-23-1-24-34-3-43Z" opacity=".72"/>
+      </g>
+      <path d="M0 322Q244 263 480 326t480 0q246-54 480 0v196H0Z" fill="#9cc779" opacity=".72"/>
+      <g opacity=".8" fill="#5a9a54">
+        <circle cx="446" cy="393" r="76"/><circle cx="527" cy="372" r="93"/><circle cx="619" cy="401" r="70"/>
+        <circle cx="1092" cy="375" r="80"/><circle cx="1188" cy="390" r="95"/><circle cx="1303" cy="374" r="73"/>
+      </g>
+      <g fill="#78b064" opacity=".85"><circle cx="465" cy="360" r="52"/><circle cx="549" cy="345" r="60"/><circle cx="1138" cy="348" r="55"/><circle cx="1234" cy="355" r="63"/><circle cx="1328" cy="346" r="50"/></g>
+      <g fill="#f0d78f" opacity=".9"><circle cx="472" cy="426" r="5"/><circle cx="580" cy="430" r="6"/><circle cx="1155" cy="422" r="5"/><circle cx="1269" cy="436" r="6"/><circle cx="1360" cy="412" r="5"/></g>
+      <!-- A cozy house at the edge of the lawn -->
+      <path d="M-36 309 179 143l223 166v326H-36Z" fill="url(#wall)" stroke="#bd8954" stroke-width="6"/>
+      <path d="M-61 315 177 116l252 199-24 35-228-177L-39 350Z" fill="url(#roof)" stroke="#663b32" stroke-width="8" stroke-linejoin="round"/>
+      <path d="M-10 321 177 164l203 158" fill="none" stroke="#c77c52" stroke-width="9" opacity=".75"/>
+      <path d="M-36 309h438v326H-36Z" fill="url(#siding)" opacity=".75"/>
+      <rect x="48" y="367" width="111" height="117" rx="8" fill="#8ac7c8" stroke="#fff0c1" stroke-width="10"/>
+      <path d="M103 371v109M53 425h101" stroke="#fff0c1" stroke-width="7"/>
+      <path d="M39 486h129" stroke="#a36943" stroke-width="8"/>
+      <rect x="218" y="371" width="104" height="264" rx="7" fill="#a96b45" stroke="#f1d395" stroke-width="9"/>
+      <path d="M228 390h84v236h-84Z" fill="#bd8052" opacity=".68"/><circle cx="297" cy="510" r="5" fill="#f4d987"/>
+      <path d="M202 357h137v18H202Z" fill="#fff0bd"/>
+      <ellipse cx="370" cy="626" rx="118" ry="18" fill="#3e6e3b" opacity=".28" filter="url(#soft)"/>
+      <!-- Picket fence behind the playable lawn -->
+      <g transform="translate(0 442)">
+        <path d="M0 76H1440v25H0Z" fill="#f2d89c" stroke="#bc955d" stroke-width="4"/><path d="M0 76H1440v25H0Z" fill="url(#fencegrain)"/>
+        <path d="M0 139H1440v25H0Z" fill="#f2d89c" stroke="#bc955d" stroke-width="4"/><path d="M0 139H1440v25H0Z" fill="url(#fencegrain)"/>
+        <g fill="#f5dda8" stroke="#bc955d" stroke-width="3">
+          <path d="M450 174V19q18-37 36 0v155Z"/><path d="M510 174V19q18-37 36 0v155Z"/><path d="M570 174V19q18-37 36 0v155Z"/>
+          <path d="M630 174V19q18-37 36 0v155Z"/><path d="M690 174V19q18-37 36 0v155Z"/><path d="M750 174V19q18-37 36 0v155Z"/>
+          <path d="M810 174V19q18-37 36 0v155Z"/><path d="M870 174V19q18-37 36 0v155Z"/><path d="M930 174V19q18-37 36 0v155Z"/>
+          <path d="M990 174V19q18-37 36 0v155Z"/><path d="M1050 174V19q18-37 36 0v155Z"/><path d="M1110 174V19q18-37 36 0v155Z"/>
+          <path d="M1170 174V19q18-37 36 0v155Z"/><path d="M1230 174V19q18-37 36 0v155Z"/><path d="M1290 174V19q18-37 36 0v155Z"/><path d="M1350 174V19q18-37 36 0v155Z"/>
+        </g>
+      </g>
+      <rect y="501" width="1440" height="399" fill="url(#lawn)"/>
+      <path d="M0 509q222-31 468 6t480 0q244-29 492 0v36H0Z" fill="#4c8f49" opacity=".68"/>
+      <path d="M-40 806q251-89 488-23t493 0q261-69 550 4v113H-40Z" fill="#5b9841" opacity=".42"/>
+      <g fill="#d5e18a" opacity=".7">
+        <path d="m414 740 5-15 4 15 13-7-8 13 14 4-15 2 5 14-10-11-8 13 3-16-15-1 14-6Z"/>
+        <path d="m1049 691 4-12 4 12 11-6-7 10 12 4-12 2 4 11-8-9-7 10 2-13-12-1 11-5Z"/>
+        <path d="m1220 790 4-13 4 13 12-6-8 11 13 3-13 2 4 12-8-10-8 11 3-14-13-1 12-5Z"/>
+      </g>
+      <g stroke="#6e9d45" stroke-width="4" stroke-linecap="round" opacity=".82">
+        <path d="m454 790-6-24m6 24 10-19m-10 19-16-14M1015 798l-2-26m2 26 12-19m-12 19-14-12M1352 745l-4-25m4 25 11-19m-11 19-15-12"/>
+      </g>
+    </svg>
+    <div class="sky-glow"></div>
+    <div class="sunshine" aria-hidden="true"></div>
+    <svg class="mobile-house" viewBox="0 0 240 180" aria-hidden="true">
+      <path d="M8 83 112 8l111 75v91H8Z" fill="#edcb8c" stroke="#b78251" stroke-width="5"/>
+      <path d="m0 82 112-78 128 79-10 15L112 24 11 98Z" fill="#984d3e" stroke="#663d35" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M38 104h55v53H38Z" fill="#87c8ce" stroke="#fff0c1" stroke-width="7"/>
+      <path d="M66 105v49M41 130h50" stroke="#fff0c1" stroke-width="4"/>
+      <path d="M133 102h45v72h-45Z" fill="#a96b45" stroke="#f1d395" stroke-width="6"/>
+      <path d="M12 173h212" stroke="#527d3d" stroke-width="10"/>
+    </svg>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">☀</div>
+        <div class="brand-copy"><p class="eyebrow">Plants vs. Zombies</p><h1>Lobotomized</h1></div>
+      </div>
+      <div class="board-status" aria-live="polite">
+        <span class="status-dot" id="statusDot"></span>
+        <span><span class="status-label">CASILLA SELECCIONADA</span><span class="status-value" id="statusValue">— · —</span></span>
+      </div>
+    </header>
+    <div class="field-note">▦ &nbsp; Jardín · tablero 5 × 9</div>
+    <section class="board-wrap" aria-label="Tablero de 5 filas por 9 columnas">
+      <div class="axis-corner"></div>
+      <div class="col-axis" id="colAxis" aria-hidden="true"></div>
+      <div class="row-axis" id="rowAxis" aria-hidden="true"></div>
+      <div class="grid" id="grid" role="grid" aria-label="Tablero de combate, 5 filas y 9 columnas"></div>
+    </section>
+    <div class="bottom-hint"><span class="mouse-icon" aria-hidden="true"></span><span>Pasa el cursor para explorar el tablero</span></div>
+    <div class="foreground" aria-hidden="true">
+      <svg class="flower-clump left" viewBox="0 0 150 120">
+        <path d="M5 119h141" stroke="#46783b" stroke-width="9"/>
+        <g fill="#3e7d3b"><path d="M28 117Q15 69 47 49q6 41-19 68M63 117Q61 63 94 52q-2 43-27 67M105 118Q91 75 119 62q12 33-9 57"/></g>
+        <g fill="#e9bb55" stroke="#f8e8a0" stroke-width="4"><circle cx="47" cy="54" r="12"/><circle cx="96" cy="51" r="11"/><circle cx="119" cy="63" r="9"/></g>
+        <g fill="#f5eee0"><circle cx="47" cy="54" r="4"/><circle cx="96" cy="51" r="4"/></g>
+      </svg>
+      <svg class="flower-clump right" viewBox="0 0 150 120">
+        <path d="M5 119h141" stroke="#46783b" stroke-width="9"/>
+        <g fill="#3e7d3b"><path d="M28 117Q15 69 47 49q6 41-19 68M63 117Q61 63 94 52q-2 43-27 67M105 118Q91 75 119 62q12 33-9 57"/></g>
+        <g fill="#db8c64" stroke="#f6c797" stroke-width="4"><circle cx="47" cy="54" r="12"/><circle cx="96" cy="51" r="11"/><circle cx="119" cy="63" r="9"/></g>
+        <g fill="#f8e8a0"><circle cx="47" cy="54" r="4"/><circle cx="96" cy="51" r="4"/></g>
+      </svg>
+      <div class="ground-edge"></div>
+    </div>
+  </main>
+  <script>
+    (() => {
+      "use strict";
+      const ROWS = 5;
+      const COLUMNS = 9;
+      const grid = document.getElementById("grid");
+      const status = document.getElementById("statusValue");
+      const dot = document.getElementById("statusDot");
+      const cells = [];
+      const colAxis = document.getElementById("colAxis");
+      const rowAxis = document.getElementById("rowAxis");
+
+      for (let column = 0; column < COLUMNS; column++) {
+        const label = document.createElement("span");
+        label.className = "axis-num";
+        label.textContent = column;
+        colAxis.append(label);
+      }
+      for (let row = 0; row < ROWS; row++) {
+        const label = document.createElement("span");
+        label.className = "axis-num";
+        label.textContent = row;
+        rowAxis.append(label);
+        for (let column = 0; column < COLUMNS; column++) {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.setAttribute("role", "gridcell");
+          cell.setAttribute("tabindex", "0");
+          cell.dataset.row = row;
+          cell.dataset.column = column;
+          cell.setAttribute("aria-label", `Fila ${row}, columna ${column}`);
+          cell.setAttribute("aria-selected", "false");
+          cell.innerHTML = `<span class="coordinate-tag">F${row} · C${column}</span>`;
+          cell.addEventListener("pointerenter", () => selectCell(row, column, cell));
+          cell.addEventListener("focus", () => selectCell(row, column, cell));
+          cell.addEventListener("pointerleave", (event) => {
+            if (!cell.contains(event.relatedTarget) && document.activeElement !== cell) clearSelection();
+          });
+          cell.addEventListener("blur", () => {
+            if (!cell.matches(":hover")) clearSelection();
+          });
+          grid.append(cell);
+          cells.push(cell);
+        }
+      }
+
+      function selectCell(row, column, element) {
+        for (const cell of cells) {
+          const active = cell === element;
+          cell.classList.toggle("is-active", active);
+          cell.setAttribute("aria-selected", String(active));
+        }
+        status.textContent = `F${row} · C${column}`;
+        dot.style.backgroundColor = "#e4b947";
+        dot.style.boxShadow = "0 0 0 4px #e4b94738";
+      }
+      function clearSelection() {
+        for (const cell of cells) {
+          cell.classList.remove("is-active");
+          cell.setAttribute("aria-selected", "false");
+        }
+        status.textContent = "— · —";
+        dot.style.backgroundColor = "#94bd5e";
+        dot.style.boxShadow = "0 0 0 4px #94bd5e2c";
+      }
+
+      // Geometry helpers use zero-based row/column coordinates and live layout measurements.
+      function isInBoard(row, column) {
+        return Number.isInteger(row) && Number.isInteger(column) && row >= 0 && row < ROWS && column >= 0 && column < COLUMNS;
+      }
+      function getCellPosition(row, column) {
+        if (!isInBoard(row, column)) return null;
+        const rect = cells[row * COLUMNS + column].getBoundingClientRect();
+        const sceneRect = document.querySelector(".scene").getBoundingClientRect();
+        return {
+          x: rect.left + rect.width / 2 - sceneRect.left,
+          y: rect.top + rect.height / 2 - sceneRect.top
+        };
+      }
+      function screenToBoard(screenX, screenY) {
+        for (let row = 0; row < ROWS; row++) {
+          for (let column = 0; column < COLUMNS; column++) {
+            const rect = cells[row * COLUMNS + column].getBoundingClientRect();
+            if (screenX >= rect.left && screenX < rect.right && screenY >= rect.top && screenY < rect.bottom) return { row, column };
+          }
+        }
+        return null;
+      }
+      function identifyCell(screenX, screenY) {
+        const coordinate = screenToBoard(screenX, screenY);
+        return coordinate ? { ...coordinate, center: getCellPosition(coordinate.row, coordinate.column) } : null;
+      }
+      // Expose the scene's small coordinate API for the next gameplay stage.
+      window.boardCoordinates = Object.freeze({ rows: ROWS, columns: COLUMNS, isInBoard, getCellPosition, screenToBoard, identifyCell });
+    })();
+  </script>
+</body>
+</html>

@@ -1,5 +1,11 @@
 # PlayGround
 
+## Plants vs. Zombies: Lobotomized — jardín y tablero
+
+Abre `index.html` en un navegador o sirve la carpeta con cualquier servidor estático. No requiere dependencias externas.
+
+La escena incluye un jardín residencial adaptable, una cuadrícula interactiva de 5 × 9 y coordenadas desde `(0, 0)` hasta `(4, 8)`. La API `window.boardCoordinates` expone `isInBoard(row, column)`, `getCellPosition(row, column)`, `screenToBoard(x, y)` e `identifyCell(x, y)`; las posiciones centrales se expresan en píxeles locales de la escena.
+
 <!-- omgithub:readme:start -->
 ## 🚀 Build, play, and remix with OMGithub
 
