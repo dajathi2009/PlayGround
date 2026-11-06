@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#6caf38">
+  <title>El jardín — Defensa vegetal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="game-shell" aria-label="Juego de jardín">
+    <canvas id="game" aria-label="Tablero de jardín. Selecciona la tarjeta y haz clic en una casilla libre."></canvas>
+    <div class="sr-only" id="game-status" aria-live="polite">100 soles. Selecciona la lanzaguisantes para colocarla.</div>
+    <div class="help-pill" aria-hidden="true"><span class="help-dot">?</span> Elige planta · clic: plantar · clic derecho: retirar</div>
+  </main>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
