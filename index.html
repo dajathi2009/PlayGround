@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080a13">
+  <title>Neon Pulse — Rhythm Arcade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Neon Pulse home"><span class="brand-mark">N<span>•</span></span><span>NEON<span class="brand-light">PULSE</span></span></a>
+      <div class="top-actions"><span class="live-dot"></span><span class="edition">ARCADE EDITION</span><button class="icon-button" id="soundToggle" aria-label="Toggle sound" title="Toggle sound">♫</button></div>
+    </header>
+
+    <section class="screen home-screen" id="homeScreen">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="eyebrow-line"></span> FEEL THE FREQUENCY</p>
+        <h1>Find your<br><span class="gradient-text">flow state.</span></h1>
+        <p class="intro">Four lanes. One beat. How long can you keep the rhythm?</p>
+        <div class="track-card">
+          <div class="cover-art" aria-hidden="true"><div class="cover-ring ring-one"></div><div class="cover-ring ring-two"></div><div class="cover-core">✳</div><span class="cover-label">NP—01</span></div>
+          <div class="track-info"><span class="track-kicker">FEATURED TRACK</span><strong>Midnight Motion</strong><span>Neon Arcade <i>·</i> 112 BPM</span></div>
+          <div class="track-length">0:34</div>
+        </div>
+        <div class="difficulty-row"><span class="diff-label">DIFFICULTY</span><div class="difficulty-options" role="group" aria-label="Choose difficulty"><button class="diff-option active" data-diff="flow">FLOW</button><button class="diff-option" data-diff="pulse">PULSE</button><button class="diff-option" data-diff="overdrive">OVERDRIVE</button></div></div>
+        <button class="play-button" id="playButton"><span class="play-icon">▶</span><span>START PLAYING</span><span class="play-arrow">↗</span></button>
+        <p class="control-hint">TAP THE LANES <span>OR</span> USE <kbd>D</kbd> <kbd>F</kbd> <kbd>J</kbd> <kbd>K</kbd></p>
+      </div>
+      <div class="visual-stage" aria-hidden="true">
+        <div class="stage-glow"></div><div class="stage-orbit orbit-a"></div><div class="stage-orbit orbit-b"></div>
+        <div class="stage-disc"><div class="disc-inner"><span class="disc-star">✳</span><span class="disc-text">MOVE WITH THE MUSIC</span></div></div>
+        <div class="stage-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="floating-tag tag-left"><span>♪</span> 112 BPM</div><div class="floating-tag tag-right"><span>✦</span> YOUR NEXT OBSESSION</div>
+      </div>
+      <footer class="home-footer"><span>BUILT FOR THE BEAT</span><span class="footer-separator">✳</span><span>NO HEADPHONES REQUIRED</span><div class="best-score">PERSONAL BEST <b id="homeBest">000000</b></div></footer>
+    </section>
+
+    <section class="screen game-screen hidden" id="gameScreen" aria-label="Rhythm game">
+      <div class="game-topline"><button class="back-button" id="exitButton" aria-label="Exit game">← <span>EXIT</span></button><div class="game-track"><span class="mini-cover">✳</span><span><b>Midnight Motion</b><small>NEON ARCADE · 112 BPM</small></span></div><div class="game-status"><span class="live-dot"></span> <span id="gameStatus">READY</span></div></div>
+      <div class="scoreboard"><div><span class="stat-label">SCORE</span><b id="scoreDisplay">000000</b></div><div class="combo-stat"><b id="comboDisplay">0</b><span>COMBO</span></div><div><span class="stat-label">ACCURACY</span><b id="accuracyDisplay">100<span>%</span></b></div></div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div><span class="progress-dot"></span></div>
+      <div class="playfield-wrap"><canvas id="gameCanvas" aria-label="Tap notes as they reach the glowing hit line"></canvas><div class="judge" id="judgeText"></div><div class="countdown hidden" id="countdown">3</div>
+        <div class="lane-controls" id="laneControls"><button class="lane-key" data-lane="0" aria-label="Tap cyan lane"><span class="lane-symbol">●</span><span class="keycap">D</span></button><button class="lane-key" data-lane="1" aria-label="Tap pink lane"><span class="lane-symbol">◆</span><span class="keycap">F</span></button><button class="lane-key" data-lane="2" aria-label="Tap yellow lane"><span class="lane-symbol">▲</span><span class="keycap">J</span></button><button class="lane-key" data-lane="3" aria-label="Tap purple lane"><span class="lane-symbol">■</span><span class="keycap">K</span></button></div>
+      </div>
+      <div class="game-footer"><span>HIT NOTES ON THE LINE</span><span class="timing-legend"><i class="perfect-dot"></i> PERFECT <i class="good-dot"></i> GOOD</span></div>
+    </section>
+
+    <section class="results-overlay hidden" id="resultsOverlay" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><div class="results-card"><div class="result-spark">✳</div><p class="eyebrow">TRACK COMPLETE</p><h2 id="resultTitle">In the zone.</h2><p class="result-subtitle">Midnight Motion <span>·</span> <span id="resultDiff">FLOW</span></p><div class="result-score-label">FINAL SCORE</div><div class="result-score" id="finalScore">000000</div><div class="result-stats"><div><b id="finalAccuracy">100%</b><span>ACCURACY</span></div><div><b id="finalCombo">0</b><span>MAX COMBO</span></div><div><b id="finalPerfect">0</b><span>PERFECT</span></div></div><div class="result-grade" id="resultGrade">S</div><button class="play-button result-play" id="againButton"><span class="play-icon">↻</span><span>PLAY AGAIN</span><span class="play-arrow">↗</span></button><button class="home-link" id="homeButton">BACK TO HOME</button></div></section>
+    <div class="toast" id="toast" aria-live="polite"></div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
