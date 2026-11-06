@@ -1,7 +1,8 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const homeScreen = $('homeScreen'), gameScreen = $('gameScreen'), canvas = $('gameCanvas');
-  const ctx = canvas.getContext('2d');
+  let ctx = null;
+  try { ctx = canvas && canvas.getContext('2d'); } catch (_) { /* Canvas may be unavailable in restricted browsers. */ }
   const colors = ['#5be6df', '#ff5cad', '#ffd36b', '#a68aff'];
   const keys = ['d', 'f', 'j', 'k'];
   const difficulties = {
@@ -11,10 +12,16 @@
   };
   let difficulty = 'flow', running = false, started = false, soundOn = true, audio, master;
   let notes = [], startAt = 0, lastFrame = 0, lastSpawn = 0, raf = 0, score = 0, combo = 0, maxCombo = 0, hits = 0, perfects = 0, misses = 0, judged = 0, elapsed = 0;
-  let judgeTimer, toastTimer, countdownTimer, pauseAt = 0, particles = [], canvasW = 0, canvasH = 0, hitY = 0;
+  let judgeTimer, toastTimer, countdownTimer, pauseAt = 0, particles = [], canvasW = 0, canvasH = 0, hitY = 0, sessionId = 0;
   const bestKey = 'neonPulseBest';
-  const best = Number(localStorage.getItem(bestKey) || 0);
-  $('homeBest').textContent = String(best).padStart(6, '0');
+  function readBest() {
+    try { return Math.max(0, Number(window.localStorage.getItem(bestKey)) || 0); }
+    catch (_) { return 0; }
+  }
+  function saveBest(value) {
+    try { window.localStorage.setItem(bestKey, String(value)); } catch (_) { /* Storage can be disabled or full. */ }
+  }
+  $('homeBest').textContent = String(readBest()).padStart(6, '0');
 
   document.querySelectorAll('.diff-option').forEach(button => button.addEventListener('click', () => {
     document.querySelectorAll('.diff-option').forEach(b => b.classList.remove('active'));
@@ -42,45 +49,58 @@
   window.addEventListener('resize', resizeCanvas);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && running && started) { started = false; pauseAt = performance.now(); cancelAnimationFrame(raf); showToast('PAUSED · RETURN TO THE GAME'); }
-    else if (!document.hidden && running && !started && pauseAt) { startAt += performance.now() - pauseAt; lastSpawn += performance.now() - pauseAt; pauseAt = 0; started = true; lastFrame = performance.now(); raf = requestAnimationFrame(loop); }
+    else if (!document.hidden && running && !started && pauseAt) { startAt += performance.now() - pauseAt; lastSpawn += performance.now() - pauseAt; pauseAt = 0; started = true; lastFrame = performance.now(); const activeSession = sessionId; raf = requestAnimationFrame(now => loop(now, activeSession)); }
   });
 
   function resizeCanvas() {
-    const rect = canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
-    canvasW = rect.width; canvasH = rect.height; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); hitY = canvasH - Math.max(100, canvasH * .22);
-    if (!running) drawIdle();
+    if (!canvas || !ctx) return;
+    try {
+      const rect = canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+      canvasW = rect.width; canvasH = rect.height; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); hitY = canvasH - Math.max(100, canvasH * .22);
+      if (!running) drawIdle();
+    } catch (_) { ctx = null; }
   }
   function startGame() {
+    const thisSession = ++sessionId;
     $('resultsOverlay').classList.add('hidden'); homeScreen.classList.add('hidden'); gameScreen.classList.remove('hidden');
     score = 0; combo = 0; maxCombo = 0; hits = 0; perfects = 0; misses = 0; judged = 0; elapsed = 0; notes = []; particles = []; started = false; running = true; lastSpawn = 0;
     $('scoreDisplay').textContent = '000000'; $('comboDisplay').textContent = '0'; $('accuracyDisplay').innerHTML = '100<span>%</span>'; $('progressFill').style.width = '0%'; $('gameStatus').textContent = 'READY';
-    resizeCanvas(); cancelAnimationFrame(raf); clearInterval(countdownTimer); pauseAt = 0;
+    resizeCanvas(); cancelAnimationFrame(raf); clearInterval(countdownTimer); clearTimeout(judgeTimer); pauseAt = 0;
     if (soundOn) initAudio();
     const countdown = $('countdown'); countdown.classList.remove('hidden'); let count = 3;
-    countdown.textContent = count; soundOn && tone(440, .1, .04);
+    countdown.textContent = count; if (soundOn) tone(440, .1, .04);
     countdownTimer = setInterval(() => {
+      if (!running || thisSession !== sessionId) { clearInterval(countdownTimer); return; }
       count--;
       if (count > 0) { countdown.textContent = count; if (soundOn) tone(440 + (3 - count) * 70, .1, .04); }
       else if (count === 0) { countdown.textContent = 'GO!'; if (soundOn) tone(880, .18, .05); }
-      else { clearInterval(countdownTimer); countdown.classList.add('hidden'); started = true; startAt = performance.now(); lastFrame = startAt; lastSpawn = startAt + 650; $('gameStatus').textContent = 'PLAYING'; raf = requestAnimationFrame(loop); }
+      else { clearInterval(countdownTimer); countdownTimer = null; countdown.classList.add('hidden'); started = true; startAt = performance.now(); lastFrame = startAt; lastSpawn = startAt + 650; $('gameStatus').textContent = 'PLAYING'; raf = requestAnimationFrame(now => loop(now, thisSession)); }
     }, 750);
   }
   function goHome() {
-    running = false; started = false; cancelAnimationFrame(raf); clearInterval(countdownTimer); clearTimeout(judgeTimer); pauseAt = 0; $('countdown').classList.add('hidden');
+    sessionId++; running = false; started = false; cancelAnimationFrame(raf); clearInterval(countdownTimer); countdownTimer = null; clearTimeout(judgeTimer); pauseAt = 0; $('countdown').classList.add('hidden');
     $('resultsOverlay').classList.add('hidden'); gameScreen.classList.add('hidden'); homeScreen.classList.remove('hidden'); $('gameStatus').textContent = 'READY';
   }
   function initAudio() {
-    try { if (!audio) { audio = new (window.AudioContext || window.webkitAudioContext)(); master = audio.createGain(); master.gain.value = .22; master.connect(audio.destination); } if (audio.state === 'suspended') audio.resume(); } catch (_) { soundOn = false; }
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) { soundOn = false; return; }
+      if (!audio) { audio = new AudioContext(); master = audio.createGain(); master.gain.value = .22; master.connect(audio.destination); }
+      if (audio.state === 'suspended') {
+        const resume = audio.resume();
+        if (resume && typeof resume.catch === 'function') resume.catch(() => {});
+      }
+    } catch (_) { soundOn = false; }
   }
   function tone(frequency, duration = .08, volume = .04, type = 'sine') {
     if (!soundOn || !audio) return;
     try { const osc = audio.createOscillator(), gain = audio.createGain(); osc.type = type; osc.frequency.value = frequency; gain.gain.setValueAtTime(volume, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + duration); osc.connect(gain); gain.connect(master); osc.start(); osc.stop(audio.currentTime + duration); } catch (_) {}
   }
-  function loop(now) {
-    if (!running || !started) return;
-    const delta = Math.min(now - lastFrame, 50); lastFrame = now; elapsed = now - startAt;
+  function loop(now, loopSession = sessionId) {
+    if (!running || !started || loopSession !== sessionId) return;
+    const delta = Math.min(Math.max(0, now - lastFrame), 50); lastFrame = now; elapsed = now - startAt;
     const config = difficulties[difficulty], trackLength = 34000;
     if (now >= lastSpawn && elapsed < trackLength) {
       spawnNote(now);
@@ -93,9 +113,9 @@
     notes = notes.filter(n => n.y < canvasH + 55 && !n.hit);
     particles = particles.filter(p => now - p.time < 550);
     $('progressFill').style.width = `${Math.min(100, elapsed / trackLength * 100)}%`;
-    draw();
+    if (!safeDraw()) return;
     if (elapsed >= trackLength + 1600 && notes.length === 0) { finishGame(); return; }
-    raf = requestAnimationFrame(loop);
+    raf = requestAnimationFrame(nextFrame => loop(nextFrame, loopSession));
   }
   function spawnNote(now) {
     let lane;
@@ -136,9 +156,17 @@
   function burst(x, y, color) {
     for (let i = 0; i < 10; i++) particles.push({ x, y, vx: (Math.random() - .5) * 150, vy: (Math.random() - .5) * 130, time: performance.now(), color });
   }
-  function drawIdle() { draw(); }
+  function drawIdle() { safeDraw(); }
+  function safeDraw() {
+    try { draw(); return true; }
+    catch (_) {
+      running = false; started = false; cancelAnimationFrame(raf);
+      $('gameStatus').textContent = 'DISPLAY ERROR'; showToast('DISPLAY ISSUE · PLEASE RELOAD');
+      return false;
+    }
+  }
   function draw() {
-    if (!canvasW || !canvasH) return;
+    if (!ctx || !canvasW || !canvasH) return;
     ctx.clearRect(0, 0, canvasW, canvasH);
     const laneW = canvasW / 4;
     for (let lane = 0; lane < 4; lane++) {
@@ -164,7 +192,15 @@
     const now = performance.now();
     particles.forEach(p => { const age = (now - p.time) / 550, alpha = 1 - age; ctx.globalAlpha = alpha; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x + p.vx * age, p.y + p.vy * age, 2.5 * alpha, 0, Math.PI * 2); ctx.fill(); }); ctx.globalAlpha = 1;
   }
-  function roundedRect(context, x, y, w, h, r) { context.beginPath(); context.roundRect(x, y, w, h, r); }
+  function roundedRect(context, x, y, w, h, r) {
+    context.beginPath();
+    if (typeof context.roundRect === 'function') { context.roundRect(x, y, w, h, r); return; }
+    const radius = Math.max(0, Math.min(r, w / 2, h / 2));
+    context.moveTo(x + radius, y); context.lineTo(x + w - radius, y); context.quadraticCurveTo(x + w, y, x + w, y + radius);
+    context.lineTo(x + w, y + h - radius); context.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+    context.lineTo(x + radius, y + h); context.quadraticCurveTo(x, y + h, x, y + h - radius);
+    context.lineTo(x, y + radius); context.quadraticCurveTo(x, y, x + radius, y);
+  }
   function finishGame() {
     running = false; started = false; cancelAnimationFrame(raf); $('gameStatus').textContent = 'COMPLETE';
     const accuracy = judged ? Math.round(hits / judged * 100) : 100;
@@ -173,7 +209,7 @@
     $('resultTitle').textContent = accuracy >= 90 ? 'In the zone.' : accuracy >= 65 ? 'Nice rhythm.' : 'Keep the beat.';
     $('resultDiff').textContent = difficulties[difficulty].label;
     $('resultsOverlay').classList.remove('hidden');
-    if (score > Number(localStorage.getItem(bestKey) || 0)) { localStorage.setItem(bestKey, score); $('homeBest').textContent = String(score).padStart(6, '0'); showToast('NEW PERSONAL BEST ✦'); }
+    if (score > readBest()) { saveBest(score); $('homeBest').textContent = String(score).padStart(6, '0'); showToast('NEW PERSONAL BEST ✦'); }
   }
   function showToast(message) { const toast = $('toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 1800); }
 })();
