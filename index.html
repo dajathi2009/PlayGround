@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#183a2a">
+  <meta name="description" content="El jardín está listo. Explora el tablero de combate de 5 por 9 casillas.">
+  <link rel="icon" href="data:,">
+  <title>Plants vs. Zombies: Lobotomized — Jardín</title>
+  <link rel="stylesheet" href="game.css">
+</head>
+<body>
+  <main class="game-shell" aria-label="Escenario del jardín">
+    <header class="topbar">
+      <div class="brand-lockup">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div>
+          <p class="eyebrow">LOBOTOMIZED <span>•</span> PROTOTIPO</p>
+          <h1>El jardín</h1>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="stage-label"><span class="sun-dot" aria-hidden="true"></span><span><b>FASE 01</b><small>Jardín residencial</small></span></div>
+        <div class="day-pill"><span aria-hidden="true">☀</span> DÍA</div>
+      </div>
+    </header>
+
+    <section class="scene-wrap" aria-label="Tablero de combate">
+      <canvas id="garden" aria-label="Jardín diurno con tablero interactivo de 5 filas por 9 columnas. Mueve el cursor para señalar una casilla."></canvas>
+      <div class="scene-caption"><span class="caption-dot"></span> CAMPO DE JUEGO <span class="caption-divider">/</span> 5 × 9</div>
+    </section>
+
+    <footer class="statusbar">
+      <div class="pointer-status"><span class="status-icon" aria-hidden="true">⌖</span><div><b id="selection-title">Explora el tablero</b><small id="selection-hint">Señala una casilla para ver sus coordenadas</small></div></div>
+      <div class="coordinates" aria-live="polite" aria-atomic="true">
+        <span class="coord-label">CASILLA</span>
+        <span class="coord-value" id="coord-value">— <i>/</i> —</span>
+        <span class="coord-detail" id="coord-detail">fila · columna</span>
+      </div>
+    </footer>
+    <div class="bottom-note"><span>JARDÍN RESIDENCIAL</span><span>Tablero preparado · 45 casillas</span></div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
