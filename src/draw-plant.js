@@ -76,8 +76,11 @@ export function drawPeashooter(ctx, x, y, size, time = 0, options = {}) {
   ctx.beginPath(); ctx.moveTo(-5, -13); ctx.quadraticCurveTo(-7, -28, -1, -42);
   ctx.lineWidth = 6.5; ctx.strokeStyle = stem; ctx.stroke();
 
-  // Rounded head.
+  // Rounded head turns slightly toward the selected target and recoils during a shot.
   ctx.save(); ctx.translate(0, breathe);
+  const aimAngle = Math.max(-0.2, Math.min(0.2, options.aimAngle ?? 0));
+  ctx.translate(0, -56); ctx.rotate(aimAngle); ctx.translate(0, 56);
+  if (options.attackState === "SHOOTING") ctx.translate(-2.2, 0);
   const head = ctx.createRadialGradient(-12, -70, 5, 0, -56, 35);
   head.addColorStop(0, "#a4e84d"); head.addColorStop(.48, "#71c936"); head.addColorStop(1, "#438d2d");
   ctx.beginPath(); ctx.ellipse(-3, -56, 29, 27, -0.12, 0, Math.PI * 2);

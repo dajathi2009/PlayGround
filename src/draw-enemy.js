@@ -16,20 +16,25 @@ function limb(ctx, startX, startY, endX, endY, width, color) {
 /** Procedurally draws the Z-Corp clone. Origin is centered between its feet. */
 export function drawBasicClone(ctx, x, y, size, time = 0, enemy = {}) {
   const scale = size / 100;
-  const age = Math.max(0, time - (enemy.spawnedAt ?? time));
   const spawning = enemy.state === "SPAWNING";
   const dying = enemy.state === "DYING";
+  const age = Math.max(0, time - (dying ? enemy.stateStartedAt : (enemy.spawnedAt ?? time)));
   const walk = enemy.state === "WALKING" || enemy.state === "DETECTING";
-  const phase = time * (walk ? 0.008 : 0.0025) + (enemy.row ?? 0) * 1.7;
+  const attacking = enemy.state === "ATTACKING";
+  const phase = time * (walk || attacking ? 0.008 : 0.0025) + (enemy.row ?? 0) * 1.7;
   const step = walk ? Math.sin(phase) : 0;
+  const punch = attacking ? Math.max(0, Math.sin(phase * 2)) : 0;
   const bob = walk ? Math.abs(Math.sin(phase * 2)) * 1.4 : Math.sin(phase) * .55;
   const spawnProgress = Math.min(1, age / 620);
 
   ctx.save();
-  ctx.translate(x, y + bob * scale);
+  ctx.translate(x + (enemy.state === "DAMAGED" ? -2.5 * scale : 0), y + bob * scale);
   ctx.scale(scale, scale * (spawning ? .78 + .22 * spawnProgress : dying ? .82 : 1));
   ctx.globalAlpha *= spawning ? spawnProgress : dying ? Math.max(0, 1 - age / 650) : 1;
-  if (enemy.state === "DAMAGED") ctx.globalAlpha *= .7 + Math.sin(time * .05) * .3;
+  if (enemy.state === "DAMAGED") {
+    ctx.globalAlpha *= .65 + Math.sin(time * .05) * .35;
+    ctx.filter = "brightness(1.45)";
+  }
 
   // Soft shadow and scuffed shoes.
   ctx.beginPath(); ctx.ellipse(0, -2, 26, 6, 0, 0, Math.PI * 2);
