@@ -1,3 +1,5 @@
+import { ResourceManager } from "./resource-manager.js";
+
 export const PLANT_TYPES = Object.freeze({
   peashooter: Object.freeze({
     id: "peashooter",
@@ -13,10 +15,11 @@ export const PLANT_TYPES = Object.freeze({
 
 /** Owns plant data, board occupancy, resources, and card recharge state. */
 export class PlantSystem {
-  constructor(rows = 5, columns = 9, startingSun = 100) {
+  constructor(rows = 5, columns = 9, resources = 100) {
     this.rows = rows;
     this.columns = columns;
-    this.sun = startingSun;
+    this.resources = resources instanceof ResourceManager ? resources : new ResourceManager(resources);
+    Object.defineProperty(this, "sun", { enumerable: true, get: () => this.resources.getBalance() });
     this.occupancy = Array.from({ length: rows }, () => Array(columns).fill(null));
     this.plants = new Map();
     this.cardReadyAt = new Map(Object.keys(PLANT_TYPES).map((type) => [type, 0]));
@@ -40,7 +43,7 @@ export class PlantSystem {
     const definition = PLANT_TYPES[type];
     if (!definition || !this.isCellInBounds(row, column)) return { ok: false, reason: "outside" };
     if (this.occupancy[row][column]) return { ok: false, reason: "occupied" };
-    if (this.sun < definition.cost) return { ok: false, reason: "sun" };
+    if (!this.resources.canBuyPlant(definition.cost)) return { ok: false, reason: "sun" };
     if (this.cooldownRemaining(type, now) > 0) return { ok: false, reason: "cooldown" };
     return { ok: true };
   }
@@ -48,6 +51,7 @@ export class PlantSystem {
     const check = this.canPlace(type, row, column, now);
     if (!check.ok) return check;
     const definition = PLANT_TYPES[type];
+    if (!this.resources.spend(definition.cost, `plant:${type}`)) return { ok: false, reason: "sun" };
     const id = `plant-${this.nextId++}`;
     const plant = {
       id,
@@ -72,7 +76,6 @@ export class PlantSystem {
       animationStartedAt: now,
       rechargeMs: definition.rechargeMs,
     };
-    this.sun = Math.max(0, this.sun - definition.cost);
     this.occupancy[row][column] = id;
     this.plants.set(id, plant);
     this.cardReadyAt.set(type, now + definition.rechargeMs);

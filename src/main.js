@@ -3,15 +3,24 @@ import { drawPeashooter } from "./draw-plant.js";
 import { EnemySystem, ENEMY_TYPES } from "./enemy-system.js";
 import { drawBasicClone } from "./draw-enemy.js";
 import { ProjectileSystem } from "./projectile-system.js";
+import { ResourceManager } from "./resource-manager.js";
+import { SunSystem } from "./sun-system.js";
+import { SUN_CONFIG } from "./sun-config.js";
 
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
 const liveStatus = document.querySelector("#game-status");
-const game = new PlantSystem(5, 9, 100);
+const resources = new ResourceManager(SUN_CONFIG.startingBalance);
+const game = new PlantSystem(5, 9, resources);
 const enemies = new EnemySystem(game.rows);
 const projectiles = new ProjectileSystem();
-const pointer = { x: -1, y: -1, down: null, inside: false };
-const state = { selected: null, hoveredCell: null, toast: "¡Tu jardín está listo!", toastUntil: performance.now() + 2600 };
+const suns = new SunSystem(SUN_CONFIG);
+const pointer = { x: -1, y: -1, down: null, inside: false, hoveredSun: null };
+const state = { selected: null, hoveredCell: null, toast: "¡Tu jardín está listo!", toastUntil: performance.now() + 2600, counterChangedAt: -1e9, counterChangeType: null };
+resources.subscribe((change) => {
+  state.counterChangedAt = performance.now();
+  state.counterChangeType = change.type;
+});
 let width = 0;
 let height = 0;
 let dpr = 1;
@@ -135,11 +144,68 @@ function drawSunIcon(x, y, radius) {
   ctx.lineWidth = 1.6; ctx.strokeStyle = "#c88023"; ctx.stroke(); ctx.restore();
 }
 
+function drawSun(sun, now) {
+  const age = now - sun.spawnedAt;
+  const fadeIn = Math.min(1, age / SUN_CONFIG.spawnFadeMs);
+  let alpha = fadeIn;
+  let scale = 1;
+  let lift = 0;
+  if (sun.collected) {
+    const progress = Math.min(1, (now - sun.collectedAt) / SUN_CONFIG.collectDurationMs);
+    alpha *= 1 - progress;
+    scale = 1 + progress * .65;
+    lift = progress * 24;
+  } else if (sun.expired) {
+    alpha *= Math.max(0, 1 - (now - sun.expiredAt) / 300);
+  }
+  const hovered = pointer.hoveredSun === sun.id && !sun.collected && !sun.expired;
+  const radius = SUN_CONFIG.radius * (hovered ? 1.12 : 1) * scale;
+  const sway = Math.sin(now * .0024 + sun.phase) * (sun.falling ? 2.8 : 1.7);
+  const pulse = 1 + Math.sin(now * .004 + sun.phase) * .045;
+  const x = sun.x + sway;
+  const y = sun.y - lift + Math.sin(now * .0018 + sun.phase) * 1.5;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, alpha);
+  ctx.translate(x, y);
+  ctx.scale(pulse, pulse);
+  ctx.shadowColor = hovered ? "rgba(255,244,95,.95)" : "rgba(255,203,48,.72)";
+  ctx.shadowBlur = hovered ? 24 : 15;
+  ctx.fillStyle = "rgba(255,218,74,.25)";
+  ctx.beginPath(); ctx.arc(0, 0, radius + 5, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.rotate(now * .00035 + sun.phase);
+  ctx.lineCap = "round";
+  for (let i = 0; i < 12; i++) {
+    ctx.save(); ctx.rotate(i * Math.PI / 6);
+    ctx.strokeStyle = i % 2 ? "#e89a23" : "#d9851d";
+    ctx.lineWidth = 3.2;
+    ctx.beginPath(); ctx.moveTo(0, -radius * .78); ctx.lineTo(0, -radius - (i % 3 === 0 ? 9 : 7)); ctx.stroke();
+    ctx.restore();
+  }
+  const gradient = ctx.createRadialGradient(-radius * .32, -radius * .38, 1, 0, 0, radius);
+  gradient.addColorStop(0, "#fffeb0"); gradient.addColorStop(.52, "#ffe35a"); gradient.addColorStop(1, "#f6ad2e");
+  ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.fillStyle = gradient; ctx.fill(); ctx.lineWidth = 2.2; ctx.strokeStyle = "#d68520"; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, radius * .57, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,249,139,.68)"; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-radius * .28, -radius * .34, radius * .22, radius * .12, -.55, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,225,.84)"; ctx.fill();
+  if (hovered) {
+    ctx.beginPath(); ctx.arc(0, 0, radius + 12, 0, Math.PI * 2);
+    ctx.setLineDash([3, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,207,.9)"; ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+function drawSuns(now) {
+  for (const sun of suns.suns.values()) drawSun(sun, now);
+}
+
 function drawCard(now) {
   const { x, y, w, h } = layout.card;
   const definition = PLANT_TYPES.peashooter;
   const remaining = game.cooldownRemaining("peashooter", now);
-  const affordable = game.sun >= definition.cost;
+  const affordable = resources.canBuyPlant(definition.cost);
   const selected = state.selected === "peashooter";
   ctx.save();
   ctx.shadowColor = "rgba(54,58,27,.26)"; ctx.shadowBlur = 12; ctx.shadowOffsetY = 5;
@@ -192,9 +258,16 @@ function drawCard(now) {
   ctx.restore();
 }
 
-function drawCounter() {
+function drawCounter(now) {
   const { x, y, w, h } = layout.counter;
+  const changeAge = now - state.counterChangedAt;
+  const pulse = changeAge >= 0 && changeAge < 360 ? 1 + Math.sin((1 - changeAge / 360) * Math.PI) * .045 : 1;
   ctx.save();
+  ctx.translate(x + w / 2, y + h / 2); ctx.scale(pulse, pulse); ctx.translate(-(x + w / 2), -(y + h / 2));
+  if (changeAge >= 0 && changeAge < 300) {
+    ctx.fillStyle = state.counterChangeType === "add" ? "rgba(255,235,105,.28)" : "rgba(240,166,81,.24)";
+    roundedRect(ctx, x - 2, y - 2, w + 4, h + 4, 15); ctx.fill();
+  }
   ctx.shadowColor = "rgba(57,68,31,.18)"; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
   fillRound(ctx, x, y, w, h, 14, "#f9edc9", "#986b35", 2);
   ctx.shadowColor = "transparent";
@@ -345,7 +418,7 @@ function drawBoard(now) {
     const occupant = game.getAt(cell.row, cell.column);
     const centerX = left + (cell.column + .5) * cellW;
     const baseline = top + (cell.row + .87) * cellH;
-    if (!occupant && game.sun >= PLANT_TYPES[state.selected].cost && game.cooldownRemaining(state.selected, now) <= 0) {
+    if (!occupant && resources.canBuyPlant(PLANT_TYPES[state.selected].cost) && game.cooldownRemaining(state.selected, now) <= 0) {
       drawPeashooter(ctx, centerX, baseline, cellW * .83, now, { ghost: true });
     } else if (occupant) {
       const markY = top + (cell.row + .2) * cellH;
@@ -394,6 +467,15 @@ function canvasPoint(event) {
 
 function updatePointer(point) {
   pointer.x = point.x; pointer.y = point.y; pointer.inside = true;
+  pointer.hoveredSun = null;
+  const liveSuns = [...suns.suns.values()];
+  for (let i = liveSuns.length - 1; i >= 0; i--) {
+    const sun = liveSuns[i];
+    if (sun.collected || sun.expired) continue;
+    const dx = point.x - sun.x; const dy = point.y - sun.y;
+    if (dx * dx + dy * dy <= (SUN_CONFIG.radius + 11) ** 2) { pointer.hoveredSun = sun.id; break; }
+  }
+  canvas.style.cursor = pointer.hoveredSun ? "pointer" : "crosshair";
   const { left, top, cellW, cellH, boardW, boardH } = layout;
   if (point.x >= left && point.x < left + boardW && point.y >= top && point.y < top + boardH) {
     const column = Math.floor((point.x - left) / cellW);
@@ -423,6 +505,15 @@ function handlePointerUp(event) {
     return;
   }
   if (button !== 0) return;
+  if (pointer.hoveredSun) {
+    const collected = suns.collect(pointer.hoveredSun, performance.now());
+    if (collected) {
+      resources.add(SUN_CONFIG.value, "sun-pickup");
+      setMessage(`¡+${SUN_CONFIG.value} soles!`, 1100);
+    }
+    pointer.hoveredSun = null;
+    return;
+  }
   const { x, y, w, h } = layout.card;
   if (point.x >= x && point.x <= x + w && point.y >= y && point.y <= y + h) {
     const type = "peashooter";
@@ -432,7 +523,7 @@ function handlePointerUp(event) {
       return;
     }
     const reason = game.canPlace(type, 0, 0).reason;
-    if (game.sun < PLANT_TYPES[type].cost) {
+    if (!resources.canBuyPlant(PLANT_TYPES[type].cost)) {
       showCardError(type, "sun"); state.selected = null; return;
     }
     if (game.cooldownRemaining(type) > 0) {
@@ -468,18 +559,20 @@ function draw(time) {
   for (const plant of activePlants) plant.boardX = (plant.worldPosition.x - layout.left) / layout.cellW;
   enemies.update(time, activePlants, game, layout.cellW);
   updateCombat(time);
+  suns.update(time, { left: layout.left + SUN_CONFIG.radius + 3, top: layout.top + 6, width: Math.max(1, layout.boardW - (SUN_CONFIG.radius + 6) * 2), height: Math.max(1, layout.boardH - 12) });
   drawBackground(time);
   drawBrand(time);
   drawCard(time);
-  drawCounter();
+  drawCounter(time);
   drawBoard(time);
+  drawSuns(time);
   drawFooter(time);
   requestAnimationFrame(draw);
 }
 
 canvas.addEventListener("pointermove", (event) => updatePointer(canvasPoint(event)));
 canvas.addEventListener("pointerleave", () => {
-  if (pointer.down === null) { pointer.inside = false; state.hoveredCell = null; }
+  if (pointer.down === null) { pointer.inside = false; pointer.hoveredSun = null; state.hoveredCell = null; canvas.style.cursor = "crosshair"; }
 });
 canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 && event.button !== 2) return;
