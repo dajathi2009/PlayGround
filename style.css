@@ -3,19 +3,36 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 body { font-family: "Trebuchet MS", "Arial Rounded MT Bold", system-ui, sans-serif; color: #23351c; }
 .game-shell { position: relative; width: 100%; height: 100%; min-height: 320px; overflow: hidden; touch-action: none; }
 canvas { display: block; width: 100%; height: 100%; outline: none; cursor: crosshair; }
-.enemy-controls { position: absolute; z-index: 2; top: 20px; right: 22px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid rgba(74,82,47,.3); border-radius: 13px; background: rgba(255,250,220,.92); box-shadow: 0 3px 12px rgba(47,70,29,.16); color: #52613b; font-size: 12px; font-weight: 800; }
-.enemy-controls select, .enemy-controls button { min-height: 34px; border: 1px solid #8a9d60; border-radius: 8px; background: #fffdf0; color: #344a2a; font: inherit; }
-.enemy-controls select { padding: 0 8px; }
-.enemy-controls button { padding: 0 11px; background: #5d923c; border-color: #477532; color: white; cursor: pointer; }
-.enemy-controls button:hover { background: #4d8031; }
-.enemy-controls button:focus-visible, .enemy-controls select:focus-visible { outline: 3px solid #f1c84d; outline-offset: 2px; }
+.wave-hud { position: absolute; z-index: 2; top: 15px; right: 20px; width: min(292px, calc(100vw - 32px)); padding: 10px 12px; border: 1px solid rgba(74,82,47,.3); border-radius: 14px; background: rgba(255,250,220,.94); box-shadow: 0 4px 14px rgba(47,70,29,.17); color: #52613b; }
+.wave-hud-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wave-hud-top strong { overflow: hidden; color: #344a2a; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.wave-hud button, .result-card button { min-height: 32px; padding: 0 12px; border: 1px solid #477532; border-radius: 9px; background: #5d923c; color: white; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.wave-hud button:hover:not(:disabled), .result-card button:hover { background: #4d8031; }
+.wave-hud button:disabled { opacity: .56; cursor: default; }
+.wave-hud button:focus-visible, .result-card button:focus-visible { outline: 3px solid #f1c84d; outline-offset: 2px; }
+.wave-track { height: 7px; margin-top: 8px; overflow: hidden; border-radius: 99px; background: #d7d9ae; }
+.wave-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #70aa3e, #b4ce4d); transition: width .25s ease; }
+.wave-hud p { margin: 6px 0 0; font-size: 11px; font-weight: 700; }
+#wave-countdown { color: #8a6330; }
+.result-overlay { position: absolute; z-index: 5; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(31,48,26,.48); backdrop-filter: blur(4px); }
+.result-overlay[hidden] { display: none; }
+.result-card { width: min(420px, 100%); padding: 28px 24px; border: 2px solid #e6ca82; border-radius: 22px; background: linear-gradient(145deg, #fff8df, #e8d39e); box-shadow: 0 16px 50px rgba(20,33,16,.35); text-align: center; }
+.result-kicker { margin: 0 0 8px; color: #658744; font-size: 11px; font-weight: 900; letter-spacing: .14em; }
+.result-card h1 { margin: 0; color: #3c582d; font-size: clamp(26px, 7vw, 38px); }
+.result-card p:not(.result-kicker) { margin: 12px 0 20px; color: #5a553a; line-height: 1.5; }
+.result-card button { min-height: 42px; padding: 0 20px; font-size: 14px; }
 .help-pill { position: absolute; right: 18px; bottom: 14px; padding: 8px 13px 8px 9px; border: 1px solid rgba(67,87,37,.22); border-radius: 999px; background: rgba(255,250,220,.86); box-shadow: 0 3px 12px rgba(47,70,29,.13); color: #52613b; font-size: 12px; font-weight: 700; pointer-events: none; }
 .help-dot { display: inline-grid; place-items: center; width: 19px; height: 19px; margin-right: 5px; border-radius: 50%; background: #719a3f; color: white; font-size: 12px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @media (max-width: 600px) {
-  .enemy-controls { top: auto; right: auto; left: 8px; bottom: 7px; gap: 5px; padding: 5px 6px; font-size: 10px; }
-  .enemy-controls select, .enemy-controls button { min-height: 30px; }
-  .enemy-controls button { padding: 0 8px; }
+  .wave-hud { top: auto; right: 8px; bottom: 12px; width: min(250px, calc(100vw - 16px)); padding: 7px 9px; }
+  .wave-hud-top strong { font-size: 11px; }
+  .wave-hud button { min-height: 28px; padding: 0 9px; font-size: 11px; }
+  .wave-hud p { margin-top: 4px; font-size: 10px; }
+  .wave-track { height: 6px; margin-top: 6px; }
   .help-pill { display: none; }
   .help-dot { width: 16px; height: 16px; }
+}
+@media (max-height: 500px) and (max-width: 600px) {
+  .wave-hud { bottom: 8px; }
 }

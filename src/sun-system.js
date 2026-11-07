@@ -11,6 +11,13 @@ export class SunSystem {
     this.random = Math.random;
   }
 
+  reset() {
+    this.suns.clear();
+    this.producers.clear();
+    this.nextId = 1;
+    this.nextAmbientAt = null;
+  }
+
   randomAmbientDelay() {
     const [min, max] = this.config.ambientIntervalMs;
     return min + this.random() * (max - min);

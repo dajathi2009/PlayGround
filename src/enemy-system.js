@@ -70,6 +70,13 @@ export class EnemySystem {
 
   get(id) { return this.enemies.get(id) ?? null; }
 
+  reset() {
+    this.enemies.clear();
+    this.corpses.clear();
+    this.nextId = 1;
+    this.lastUpdateAt = null;
+  }
+
   damage(id, amount, now = performance.now()) {
     const enemy = this.get(id);
     if (!enemy || !enemy.alive) return false;

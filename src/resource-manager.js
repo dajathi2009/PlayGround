@@ -3,7 +3,8 @@ import { SUN_CONFIG } from "./sun-config.js";
 /** The single authority for the player's sun balance and resource accounting. */
 export class ResourceManager {
   constructor(initialBalance = SUN_CONFIG.startingBalance) {
-    this.balance = Math.max(0, Math.floor(initialBalance));
+    this.initialBalance = Math.max(0, Math.floor(initialBalance));
+    this.balance = this.initialBalance;
     this.totalEarned = 0;
     this.totalSpent = 0;
     this.listeners = new Set();
@@ -39,6 +40,13 @@ export class ResourceManager {
     this.totalSpent += value;
     this.notify({ type: "spend", amount: value, reason });
     return true;
+  }
+  reset(initialBalance = this.initialBalance) {
+    this.initialBalance = Math.max(0, Math.floor(initialBalance));
+    this.balance = this.initialBalance;
+    this.totalEarned = 0;
+    this.totalSpent = 0;
+    this.notify({ type: "reset", amount: 0, reason: "reset" });
   }
   /** Keep the HUD contract in one place; the canvas HUD subscribes to this event. */
   updateCounter() { this.notify({ type: "refresh", amount: 0, reason: "refresh" }); }

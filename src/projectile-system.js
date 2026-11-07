@@ -6,6 +6,12 @@ export class ProjectileSystem {
     this.lastUpdateAt = null;
   }
 
+  reset() {
+    this.projectiles = [];
+    this.nextId = 1;
+    this.lastUpdateAt = null;
+  }
+
   spawn({ x, y, row, damage, speed, ownerId }, now = performance.now()) {
     const projectile = {
       id: `projectile-${this.nextId++}`,

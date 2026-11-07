@@ -1,24 +1,87 @@
 import { PLANT_TYPES, PlantSystem } from "./plant-system.js";
 import { drawPeashooter } from "./draw-plant.js";
-import { EnemySystem, ENEMY_TYPES } from "./enemy-system.js";
+import { EnemySystem } from "./enemy-system.js";
 import { drawBasicClone } from "./draw-enemy.js";
 import { ProjectileSystem } from "./projectile-system.js";
 import { ResourceManager } from "./resource-manager.js";
 import { SunSystem } from "./sun-system.js";
 import { SUN_CONFIG } from "./sun-config.js";
+import { TEST_LEVEL } from "./wave-config.js";
+import { WaveManager, WAVE_STATES } from "./wave-manager.js";
 
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
 const liveStatus = document.querySelector("#game-status");
+const waveTitle = document.querySelector("#wave-title");
+const waveProgress = document.querySelector("#wave-progress");
+const waveTrack = document.querySelector(".wave-track");
+const waveDetails = document.querySelector("#wave-details");
+const waveCountdown = document.querySelector("#wave-countdown");
+const pauseButton = document.querySelector("#pause-game");
+const resultOverlay = document.querySelector("#result-overlay");
+const resultTitle = document.querySelector("#result-title");
+const resultMessage = document.querySelector("#result-message");
+const restartButton = document.querySelector("#restart-game");
 const resources = new ResourceManager(SUN_CONFIG.startingBalance);
 const game = new PlantSystem(5, 9, resources);
 const enemies = new EnemySystem(game.rows);
 const projectiles = new ProjectileSystem();
 const suns = new SunSystem(SUN_CONFIG);
+const waveManager = new WaveManager(TEST_LEVEL, {
+  spawnEnemy: (type, row, x, overrides, now) => enemies.spawn(type, row, x, overrides, now),
+  enemySystem: enemies,
+});
 const pointer = { x: -1, y: -1, down: null, inside: false, hoveredSun: null };
 const state = { selected: null, hoveredCell: null, toast: "¡Tu jardín está listo!", toastUntil: performance.now() + 2600, counterChangedAt: -1e9, counterChangeType: null };
+let pausedAtReal = null;
+let totalPausedMs = 0;
+function simulationTime(realNow = performance.now()) {
+  return (pausedAtReal === null ? realNow : pausedAtReal) - totalPausedMs;
+}
+
+function updateWaveInterface(snapshot) {
+  state.waveSnapshot = snapshot;
+  if (!waveTitle) return;
+  const terminal = snapshot.state === WAVE_STATES.COMPLETED || snapshot.state === WAVE_STATES.DEFEAT;
+  const title = snapshot.state === WAVE_STATES.COMPLETED ? "Jardín defendido"
+    : snapshot.state === WAVE_STATES.DEFEAT ? "El jardín está en peligro"
+      : snapshot.currentWave === 0 ? "Preparando el jardín"
+        : snapshot.isFinalWave ? `OLEADA FINAL · ${snapshot.currentWave}/${snapshot.totalWaves}`
+          : `OLEADA ${snapshot.currentWave}/${snapshot.totalWaves}`;
+  waveTitle.textContent = title;
+  const progress = Math.round(snapshot.progress * 100);
+  if (waveProgress) waveProgress.style.width = `${progress}%`;
+  if (waveTrack) waveTrack.setAttribute("aria-valuenow", String(progress));
+  if (waveDetails) waveDetails.textContent = `Oleada ${snapshot.currentWave || 1} de ${snapshot.totalWaves} · ${snapshot.aliveEnemies} vivos · ${snapshot.pendingEnemies} por aparecer`;
+  if (waveCountdown) {
+    const seconds = Math.ceil(snapshot.remainingTimeMs / 1000);
+    if (snapshot.paused) waveCountdown.textContent = "Partida en pausa";
+    else if (snapshot.state === WAVE_STATES.COUNTDOWN) waveCountdown.textContent = `${snapshot.message}: ${seconds} s`;
+    else if ([WAVE_STATES.SPAWNING, WAVE_STATES.FINAL_WAVE].includes(snapshot.state)) waveCountdown.textContent = snapshot.pendingEnemies ? "Llegan más enemigos…" : "Elimina a los enemigos restantes";
+    else if (snapshot.state === WAVE_STATES.IN_PROGRESS) waveCountdown.textContent = "Elimina a los enemigos restantes";
+    else if (snapshot.state === WAVE_STATES.COMPLETED) waveCountdown.textContent = "Todas las oleadas superadas";
+    else if (snapshot.state === WAVE_STATES.DEFEAT) waveCountdown.textContent = "Un clon alcanzó el jardín";
+    else waveCountdown.textContent = snapshot.message;
+  }
+  if (pauseButton) {
+    pauseButton.disabled = terminal || !waveManager.started;
+    pauseButton.textContent = snapshot.paused ? "Reanudar" : "Pausar";
+    pauseButton.setAttribute("aria-pressed", String(snapshot.paused));
+  }
+  if (terminal && resultOverlay) {
+    resultTitle.textContent = snapshot.state === WAVE_STATES.COMPLETED ? "¡Jardín defendido!" : "¡Invasión!";
+    resultMessage.textContent = snapshot.state === WAVE_STATES.COMPLETED
+      ? `Has eliminado a los ${snapshot.totalScheduled} clones y superado las ${snapshot.totalWaves} oleadas.`
+      : "Un clon consiguió cruzar el jardín. Vuelve a intentarlo y protege todas las filas.";
+    resultOverlay.hidden = false;
+    restartButton?.focus({ preventScroll: true });
+  }
+  if (liveStatus) liveStatus.textContent = `${title}. ${waveDetails?.textContent ?? ""}. ${waveCountdown?.textContent ?? ""}`;
+}
+
+waveManager.subscribe(updateWaveInterface);
 resources.subscribe((change) => {
-  state.counterChangedAt = performance.now();
+  state.counterChangedAt = simulationTime();
   state.counterChangeType = change.type;
 });
 let width = 0;
@@ -447,7 +510,9 @@ function drawFooter(now) {
     ctx.font = `900 ${layout.compact ? 12 : 14}px Trebuchet MS, sans-serif`;
     const label = ctx.measureText(state.toast).width;
     const toastW = Math.min(width - 32, label + 38);
-    const toastY = Math.max(layout.top + layout.boardH + 58, height - 54);
+    const toastY = layout.compact
+      ? Math.min(height - 54, layout.top + layout.boardH + 58)
+      : Math.max(layout.top + layout.boardH + 58, height - 54);
     fillRound(ctx, width / 2 - toastW / 2, toastY - 17, toastW, 34, 17, "rgba(48,75,37,.9)", "rgba(240,242,196,.8)", 1);
     ctx.fillStyle = "#fff8d8"; ctx.fillText(state.toast, width / 2, toastY);
     ctx.restore();
@@ -456,8 +521,63 @@ function drawFooter(now) {
 
 function setMessage(message, duration = 1900) {
   state.toast = message;
-  state.toastUntil = performance.now() + duration;
+  state.toastUntil = simulationTime() + duration;
   if (liveStatus) liveStatus.textContent = message;
+}
+
+function drawPauseOverlay() {
+  ctx.save();
+  ctx.fillStyle = "rgba(26, 42, 22, .42)";
+  ctx.fillRect(0, 0, width, height);
+  const panelW = Math.min(330, width - 36);
+  const panelH = 118;
+  const panelX = (width - panelW) / 2;
+  const panelY = (height - panelH) / 2;
+  fillRound(ctx, panelX, panelY, panelW, panelH, 20, "rgba(255, 248, 218, .97)", "#d8bd79", 2);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#3e5b2e";
+  ctx.font = "900 26px Trebuchet MS, sans-serif";
+  ctx.fillText("Partida en pausa", width / 2, panelY + 43);
+  ctx.fillStyle = "#76613b";
+  ctx.font = "700 13px Trebuchet MS, sans-serif";
+  ctx.fillText("Pulsa «Reanudar» para continuar", width / 2, panelY + 79);
+  ctx.restore();
+}
+
+function togglePause() {
+  if (!waveManager.started || [WAVE_STATES.COMPLETED, WAVE_STATES.DEFEAT].includes(waveManager.state)) return;
+  const realNow = performance.now();
+  if (pausedAtReal === null) {
+    pausedAtReal = realNow;
+    waveManager.pause(simulationTime(realNow));
+  } else {
+    totalPausedMs += realNow - pausedAtReal;
+    pausedAtReal = null;
+    waveManager.resume(simulationTime(realNow));
+  }
+}
+
+function restartGame() {
+  const now = performance.now();
+  pausedAtReal = null;
+  totalPausedMs = 0;
+  state.selected = null;
+  state.hoveredCell = null;
+  state.toast = "¡Tu jardín está listo!";
+  state.toastUntil = now + 2600;
+  state.counterChangedAt = -1e9;
+  state.counterChangeType = null;
+  pointer.down = null;
+  pointer.hoveredSun = null;
+  resources.reset(SUN_CONFIG.startingBalance);
+  game.reset();
+  enemies.reset();
+  projectiles.reset();
+  suns.reset();
+  resultOverlay.hidden = true;
+  waveManager.reset(now);
+  canvas.style.cursor = "crosshair";
 }
 
 function canvasPoint(event) {
@@ -499,6 +619,8 @@ function handlePointerUp(event) {
   const button = pointer.down;
   pointer.down = null;
   const point = canvasPoint(event); updatePointer(point);
+  if (waveManager.pausedAt !== null || [WAVE_STATES.COMPLETED, WAVE_STATES.DEFEAT].includes(waveManager.state)) return;
+  const now = simulationTime();
   if (button === 2) {
     const plant = state.hoveredCell && game.getAt(state.hoveredCell.row, state.hoveredCell.column);
     if (plant && game.remove(plant.id)) setMessage(`Retirando ${plant.name.toLowerCase()}…`);
@@ -506,7 +628,7 @@ function handlePointerUp(event) {
   }
   if (button !== 0) return;
   if (pointer.hoveredSun) {
-    const collected = suns.collect(pointer.hoveredSun, performance.now());
+    const collected = suns.collect(pointer.hoveredSun, now);
     if (collected) {
       resources.add(SUN_CONFIG.value, "sun-pickup");
       setMessage(`¡+${SUN_CONFIG.value} soles!`, 1100);
@@ -526,7 +648,7 @@ function handlePointerUp(event) {
     if (!resources.canBuyPlant(PLANT_TYPES[type].cost)) {
       showCardError(type, "sun"); state.selected = null; return;
     }
-    if (game.cooldownRemaining(type) > 0) {
+    if (game.cooldownRemaining(type, now) > 0) {
       showCardError(type, "cooldown"); state.selected = null; return;
     }
     state.selected = type;
@@ -547,26 +669,30 @@ function handlePointerUp(event) {
     x: left + (cell.column + .5) * cellW,
     y: top + (cell.row + .87) * cellH,
   };
-  const result = game.place(state.selected, cell.row, cell.column, worldPosition);
+  const result = game.place(state.selected, cell.row, cell.column, worldPosition, now);
   if (!result.ok) { showCardError(state.selected, result.reason); return; }
   state.selected = null;
   setMessage(`¡${result.plant.name} plantada!  −${result.plant.cost} soles.`);
 }
 
 function draw(time) {
-  game.update(time);
+  const now = simulationTime(time);
+  if (!waveManager.started) waveManager.start(now);
+  game.update(now);
   const activePlants = [...game.plants.values()].filter((plant) => plant.alive && plant.exists);
   for (const plant of activePlants) plant.boardX = (plant.worldPosition.x - layout.left) / layout.cellW;
-  enemies.update(time, activePlants, game, layout.cellW);
-  updateCombat(time);
-  suns.update(time, { left: layout.left + SUN_CONFIG.radius + 3, top: layout.top + 6, width: Math.max(1, layout.boardW - (SUN_CONFIG.radius + 6) * 2), height: Math.max(1, layout.boardH - 12) });
-  drawBackground(time);
-  drawBrand(time);
-  drawCard(time);
-  drawCounter(time);
-  drawBoard(time);
-  drawSuns(time);
-  drawFooter(time);
+  enemies.update(now, activePlants, game, layout.cellW);
+  updateCombat(now);
+  suns.update(now, { left: layout.left + SUN_CONFIG.radius + 3, top: layout.top + 6, width: Math.max(1, layout.boardW - (SUN_CONFIG.radius + 6) * 2), height: Math.max(1, layout.boardH - 12) });
+  waveManager.update(now);
+  drawBackground(now);
+  drawBrand(now);
+  drawCard(now);
+  drawCounter(now);
+  drawBoard(now);
+  drawSuns(now);
+  drawFooter(now);
+  if (waveManager.pausedAt !== null) drawPauseOverlay();
   requestAnimationFrame(draw);
 }
 
@@ -582,14 +708,8 @@ canvas.addEventListener("pointerdown", (event) => {
 canvas.addEventListener("pointerup", handlePointerUp);
 canvas.addEventListener("pointercancel", () => { pointer.down = null; });
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
-const spawnButton = document.querySelector("#spawn-enemy");
-const rowSelect = document.querySelector("#enemy-row");
-spawnButton?.addEventListener("click", () => {
-  const row = Number(rowSelect?.value ?? 0);
-  const result = enemies.spawn("basicClone", row);
-  if (result.ok) setMessage(`${ENEMY_TYPES.basicClone.name}: aparece en la fila ${row + 1}.`);
-  else setMessage("No se pudo generar el clon en esa fila.");
-});
+pauseButton?.addEventListener("click", togglePause);
+restartButton?.addEventListener("click", restartGame);
 window.addEventListener("resize", resize, { passive: true });
 resize();
 requestAnimationFrame(draw);

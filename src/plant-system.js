@@ -101,6 +101,12 @@ export class PlantSystem {
     if (plant.health === 0) this.remove(id, now);
     return true;
   }
+  reset() {
+    this.occupancy = Array.from({ length: this.rows }, () => Array(this.columns).fill(null));
+    this.plants.clear();
+    this.cardReadyAt = new Map(Object.keys(PLANT_TYPES).map((type) => [type, 0]));
+    this.nextId = 1;
+  }
   update(now = performance.now()) {
     for (const [id, plant] of this.plants) {
       const age = now - plant.animationStartedAt;
