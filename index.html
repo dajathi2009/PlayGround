@@ -11,6 +11,14 @@
   <main class="game-shell" aria-label="Juego de jardín">
     <canvas id="game" aria-label="Tablero de jardín. Selecciona la tarjeta y haz clic en una casilla libre."></canvas>
     <div class="sr-only" id="game-status" aria-live="polite">100 soles. Selecciona la lanzaguisantes para colocarla.</div>
+    <div class="enemy-controls" role="group" aria-label="Pruebas de enemigos">
+      <label for="enemy-row">Fila</label>
+      <select id="enemy-row" aria-label="Fila para generar clon">
+        <option value="0">1</option><option value="1">2</option><option value="2" selected>3</option>
+        <option value="3">4</option><option value="4">5</option>
+      </select>
+      <button id="spawn-enemy" type="button">＋ Generar clon</button>
+    </div>
     <div class="help-pill" aria-hidden="true"><span class="help-dot">?</span> Elige planta · clic: plantar · clic derecho: retirar</div>
   </main>
   <script type="module" src="src/main.js"></script>
