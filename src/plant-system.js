@@ -4,6 +4,9 @@ export const PLANT_TYPES = Object.freeze({
     name: "Lanzaguisantes",
     cost: 100,
     health: 300,
+    damage: 20,
+    attackIntervalMs: 1500,
+    projectileSpeed: 180,
     rechargeMs: 4200,
   }),
 });
@@ -51,7 +54,16 @@ export class PlantSystem {
       type,
       name: definition.name,
       cost: definition.cost,
+      maxHealth: definition.health,
       health: definition.health,
+      alive: true,
+      damage: definition.damage,
+      attackIntervalMs: definition.attackIntervalMs,
+      projectileSpeed: definition.projectileSpeed,
+      attackState: "IDLE",
+      targetId: null,
+      nextAttackAt: now,
+      attackStartedAt: 0,
       row,
       column,
       worldPosition: { x: worldPosition.x, y: worldPosition.y },
@@ -66,12 +78,24 @@ export class PlantSystem {
     this.cardReadyAt.set(type, now + definition.rechargeMs);
     return { ok: true, plant };
   }
-  /** Marks a plant for a short disappearance animation, then releases its cell. */
+  /** Starts the death animation and frees the board cell immediately. */
   remove(id, now = performance.now()) {
     const plant = this.getPlant(id);
-    if (!plant || !plant.exists || plant.animationState === "disappearing") return false;
+    if (!plant || !plant.alive || plant.animationState === "disappearing") return false;
+    plant.alive = false;
     plant.animationState = "disappearing";
     plant.animationStartedAt = now;
+    plant.attackState = "IDLE";
+    plant.targetId = null;
+    if (this.occupancy[plant.row][plant.column] === id) this.occupancy[plant.row][plant.column] = null;
+    return true;
+  }
+  damage(id, amount, now = performance.now()) {
+    const plant = this.getPlant(id);
+    if (!plant || !plant.alive) return false;
+    plant.health = Math.max(0, plant.health - Math.max(0, amount));
+    plant.hitAt = now;
+    if (plant.health === 0) this.remove(id, now);
     return true;
   }
   update(now = performance.now()) {

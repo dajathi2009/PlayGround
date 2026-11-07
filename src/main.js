@@ -2,12 +2,14 @@ import { PLANT_TYPES, PlantSystem } from "./plant-system.js";
 import { drawPeashooter } from "./draw-plant.js";
 import { EnemySystem, ENEMY_TYPES } from "./enemy-system.js";
 import { drawBasicClone } from "./draw-enemy.js";
+import { ProjectileSystem } from "./projectile-system.js";
 
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
 const liveStatus = document.querySelector("#game-status");
 const game = new PlantSystem(5, 9, 100);
 const enemies = new EnemySystem(game.rows);
+const projectiles = new ProjectileSystem();
 const pointer = { x: -1, y: -1, down: null, inside: false };
 const state = { selected: null, hoveredCell: null, toast: "¡Tu jardín está listo!", toastUntil: performance.now() + 2600 };
 let width = 0;
@@ -24,6 +26,10 @@ function resize() {
   canvas.height = Math.round(height * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   layout = makeLayout();
+  for (const plant of game.plants.values()) {
+    plant.worldPosition.x = layout.left + (plant.column + .5) * layout.cellW;
+    plant.worldPosition.y = layout.top + (plant.row + .87) * layout.cellH;
+  }
 }
 
 function makeLayout() {
@@ -50,6 +56,11 @@ function fillRound(c, x, y, w, h, r, fill, stroke = null, lineWidth = 1) {
   roundedRect(c, x, y, w, h, r);
   c.fillStyle = fill; c.fill();
   if (stroke) { c.lineWidth = lineWidth; c.strokeStyle = stroke; c.stroke(); }
+}
+function drawHealthBar(x, y, w, health, maxHealth) {
+  const ratio = Math.max(0, Math.min(1, health / maxHealth));
+  fillRound(ctx, x - 1, y - 1, w + 2, 6, 3, "rgba(34,42,28,.8)");
+  if (ratio > 0) fillRound(ctx, x, y, w * ratio, 4, 2, ratio > .5 ? "#75d34d" : ratio > .25 ? "#f1c84f" : "#e45c4a");
 }
 function drawCloud(x, y, scale, alpha = 1) {
   ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = "#fffbe6";
@@ -200,6 +211,59 @@ function drawCounter() {
   ctx.restore();
 }
 
+function updateCombat(now) {
+  const { left, top, cellW, cellH } = layout;
+  const targets = [...enemies.enemies.values()].filter((enemy) => enemy.alive);
+  for (const plant of game.plants.values()) {
+    if (!plant.alive || !plant.exists) {
+      plant.attackState = "IDLE";
+      plant.targetId = null;
+      continue;
+    }
+    plant.boardX = (plant.worldPosition.x - left) / cellW;
+    const target = targets
+      .filter((enemy) => enemy.row === plant.row && enemy.x > plant.boardX)
+      .sort((a, b) => a.x - b.x)[0] ?? null;
+    plant.targetId = target?.id ?? null;
+    if (!target) {
+      plant.attackState = "IDLE";
+      continue;
+    }
+    if (now >= plant.nextAttackAt) {
+      const plantSize = cellW * .83;
+      projectiles.spawn({
+        x: plant.worldPosition.x + plantSize * .39,
+        y: plant.worldPosition.y - plantSize * .565,
+        row: plant.row,
+        damage: plant.damage,
+        speed: plant.projectileSpeed,
+        ownerId: plant.id,
+      }, now);
+      plant.attackState = "SHOOTING";
+      plant.attackStartedAt = now;
+      plant.nextAttackAt = now + plant.attackIntervalMs;
+    } else {
+      plant.attackState = now - plant.attackStartedAt < 180 ? "SHOOTING" : "AIMING";
+    }
+  }
+  projectiles.update(now, enemies.enemies, { ...layout, width, left, top, cellW, cellH }, enemies);
+}
+
+function drawProjectile(projectile, time) {
+  const pulse = 1 + Math.sin((time - projectile.spawnedAt) * .018) * .08;
+  ctx.save();
+  ctx.translate(projectile.x, projectile.y);
+  ctx.shadowColor = "rgba(38,77,25,.35)"; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2;
+  const glow = ctx.createRadialGradient(-2, -3, 1, 0, 0, projectile.radius * pulse);
+  glow.addColorStop(0, "#e4ff8a"); glow.addColorStop(.55, "#83d63e"); glow.addColorStop(1, "#438a2c");
+  ctx.beginPath(); ctx.arc(0, 0, projectile.radius * pulse, 0, Math.PI * 2);
+  ctx.fillStyle = glow; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = "#315d25"; ctx.stroke();
+  ctx.shadowColor = "transparent";
+  ctx.beginPath(); ctx.ellipse(-projectile.radius * .3, -projectile.radius * .35, projectile.radius * .22, projectile.radius * .12, -.5, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,220,.8)"; ctx.fill();
+  ctx.restore();
+}
+
 function drawBoard(now) {
   const { left, top, cellW, cellH, boardW, boardH } = layout;
   ctx.save();
@@ -237,8 +301,19 @@ function drawBoard(now) {
   // Plant data is rendered independently from occupancy and placement rules.
   for (const plant of game.plants.values()) {
     if (!plant.exists) continue;
-    drawPeashooter(ctx, plant.worldPosition.x, plant.worldPosition.y, cellW * .83, now,
-      { age: now - plant.animationStartedAt, disappearing: plant.animationState === "disappearing" });
+    const target = plant.targetId ? enemies.get(plant.targetId) : null;
+    const plantSize = cellW * .83;
+    const muzzleX = plant.worldPosition.x + plantSize * .39;
+    const muzzleY = plant.worldPosition.y - plantSize * .565;
+    const targetX = target ? left + target.x * cellW : muzzleX + cellW;
+    const targetY = target ? top + (target.row + .88) * cellH - cellH * .96 * .55 : muzzleY;
+    drawPeashooter(ctx, plant.worldPosition.x, plant.worldPosition.y, plantSize, now, {
+      age: now - plant.animationStartedAt,
+      disappearing: plant.animationState === "disappearing",
+      attackState: plant.attackState,
+      aimAngle: plant.targetId ? Math.atan2(targetY - muzzleY, targetX - muzzleX) : 0,
+    });
+    if (plant.alive) drawHealthBar(plant.worldPosition.x - cellW * .2, plant.worldPosition.y - plantSize * .96, cellW * .4, plant.health, plant.maxHealth);
   }
   // Enemies are drawn above plants so a clone approaching an obstacle stays legible.
   for (const enemy of enemies.enemies.values()) {
@@ -246,6 +321,7 @@ function drawBoard(now) {
     const enemyX = left + enemy.x * cellW;
     const enemyY = top + (enemy.row + .88) * cellH;
     drawBasicClone(ctx, enemyX, enemyY, cellH * .96, now, enemy);
+    drawHealthBar(enemyX - cellH * .21, enemyY - cellH * .98, cellH * .42, enemy.health, enemy.maxHealth);
     if (enemy.state === "DETECTING" || enemy.state === "ATTACKING") {
       const label = enemy.state === "DETECTING" ? "¡PLANTA!" : "DETENIDO";
       ctx.save();
@@ -258,6 +334,12 @@ function drawBoard(now) {
       ctx.restore();
     }
   }
+  for (const corpse of enemies.corpses.values()) {
+    const corpseX = left + corpse.x * cellW;
+    const corpseY = top + (corpse.row + .88) * cellH;
+    drawBasicClone(ctx, corpseX, corpseY, cellH * .96, now, corpse);
+  }
+  for (const projectile of projectiles.projectiles) drawProjectile(projectile, now);
   const cell = state.hoveredCell;
   if (state.selected && cell) {
     const occupant = game.getAt(cell.row, cell.column);
@@ -382,7 +464,10 @@ function handlePointerUp(event) {
 
 function draw(time) {
   game.update(time);
-  enemies.update(time, [...game.plants.values()]);
+  const activePlants = [...game.plants.values()].filter((plant) => plant.alive && plant.exists);
+  for (const plant of activePlants) plant.boardX = (plant.worldPosition.x - layout.left) / layout.cellW;
+  enemies.update(time, activePlants, game, layout.cellW);
+  updateCombat(time);
   drawBackground(time);
   drawBrand(time);
   drawCard(time);
