@@ -1,10 +1,13 @@
 import { PLANT_TYPES, PlantSystem } from "./plant-system.js";
 import { drawPeashooter } from "./draw-plant.js";
+import { EnemySystem, ENEMY_TYPES } from "./enemy-system.js";
+import { drawBasicClone } from "./draw-enemy.js";
 
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
 const liveStatus = document.querySelector("#game-status");
 const game = new PlantSystem(5, 9, 100);
+const enemies = new EnemySystem(game.rows);
 const pointer = { x: -1, y: -1, down: null, inside: false };
 const state = { selected: null, hoveredCell: null, toast: "¡Tu jardín está listo!", toastUntil: performance.now() + 2600 };
 let width = 0;
@@ -237,6 +240,24 @@ function drawBoard(now) {
     drawPeashooter(ctx, plant.worldPosition.x, plant.worldPosition.y, cellW * .83, now,
       { age: now - plant.animationStartedAt, disappearing: plant.animationState === "disappearing" });
   }
+  // Enemies are drawn above plants so a clone approaching an obstacle stays legible.
+  for (const enemy of enemies.enemies.values()) {
+    if (enemy.state === "DEAD") continue;
+    const enemyX = left + enemy.x * cellW;
+    const enemyY = top + (enemy.row + .88) * cellH;
+    drawBasicClone(ctx, enemyX, enemyY, cellH * .96, now, enemy);
+    if (enemy.state === "DETECTING" || enemy.state === "ATTACKING") {
+      const label = enemy.state === "DETECTING" ? "¡PLANTA!" : "DETENIDO";
+      ctx.save();
+      ctx.font = `900 ${layout.compact ? 8 : 9}px Trebuchet MS, sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const labelW = ctx.measureText(label).width + 12;
+      fillRound(ctx, enemyX - labelW / 2, enemyY - cellH * .99, labelW, 16, 8,
+        enemy.state === "ATTACKING" ? "rgba(116,65,48,.9)" : "rgba(69,83,47,.88)", "rgba(255,244,206,.8)", 1);
+      ctx.fillStyle = "#fff4d5"; ctx.fillText(label, enemyX, enemyY - cellH * .99 + 8);
+      ctx.restore();
+    }
+  }
   const cell = state.hoveredCell;
   if (state.selected && cell) {
     const occupant = game.getAt(cell.row, cell.column);
@@ -361,6 +382,7 @@ function handlePointerUp(event) {
 
 function draw(time) {
   game.update(time);
+  enemies.update(time, [...game.plants.values()]);
   drawBackground(time);
   drawBrand(time);
   drawCard(time);
@@ -382,6 +404,14 @@ canvas.addEventListener("pointerdown", (event) => {
 canvas.addEventListener("pointerup", handlePointerUp);
 canvas.addEventListener("pointercancel", () => { pointer.down = null; });
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+const spawnButton = document.querySelector("#spawn-enemy");
+const rowSelect = document.querySelector("#enemy-row");
+spawnButton?.addEventListener("click", () => {
+  const row = Number(rowSelect?.value ?? 0);
+  const result = enemies.spawn("basicClone", row);
+  if (result.ok) setMessage(`${ENEMY_TYPES.basicClone.name}: aparece en la fila ${row + 1}.`);
+  else setMessage("No se pudo generar el clon en esa fila.");
+});
 window.addEventListener("resize", resize, { passive: true });
 resize();
 requestAnimationFrame(draw);
